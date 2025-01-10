@@ -1,0 +1,1 @@
+﻿This program scrapes Console Games Wiki for Shared FATE data for my ShopItemRevealer plugin. No support is provided for this program. Use at your own risk.
