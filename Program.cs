@@ -4,15 +4,33 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
+using Lumina;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
 
 namespace WikiParser
 {
     internal class WikiParser
     {
+        private static GameData lumina = null!;
+        public static ExcelSheet<Item> itemSheet = null!;
+        public static ExcelSheet<Quest> questSheet = null!;
+        public static ExcelSheet<TerritoryType> territoryTypeSheet = null!;
         static void Main(string[] args)
         {
+            var seGamePath = string.Join("", args);
+            if (seGamePath == "")
+            {
+                Console.WriteLine("Please provide the path to the game's sqpack folder as an argument");
+                return;
+            }
             try
             {
+                
+                lumina = new GameData(seGamePath);
+                itemSheet = lumina.GetExcelSheet<Item>()!;
+                questSheet = lumina.GetExcelSheet<Quest>()!;
+                territoryTypeSheet = lumina.GetExcelSheet<TerritoryType>()!;
                 RunParser().Wait();
             }
             catch (Exception e)
@@ -20,10 +38,12 @@ namespace WikiParser
                 Console.WriteLine(e.Message);
             }
             Console.WriteLine("Job's done!");
+            Debugger.Break();
         }
         private static List<WikiFateItem> Items = [];
         private static async Task RunParser()
         {
+            
             var targetUrl = "https://ffxiv.consolegameswiki.com/wiki/Shared_FATE";
             using HttpClient client = new(new HttpClientHandler { });
             client.DefaultRequestHeaders.Add("Encoding", "UTF-8");
@@ -53,12 +73,11 @@ namespace WikiParser
                         if (zoneName != "" && zoneName != "All Zones")
                         {
                             // changed zone, add all zone items to last zone
-                            foreach (var item in allZoneItems)
+                            foreach (var zitem in allZoneItems)
                             {
-                                var i = item;
-                                i.ZoneName = zoneName;
-                                Items.Add(item);
-                                Console.WriteLine($"Added {item} from {zoneName} in {expansionName}");
+                                var i = zitem;
+                                Items.Add(zitem);
+                                Console.WriteLine($"Added {zitem} from {zoneName} in {expansionName}");
                             }
                             allZoneItems.Clear();
                         }
@@ -82,18 +101,24 @@ namespace WikiParser
                         var materiaNames = Materia.GetMateriaNames(expansionName, index);
                         foreach (var materiaName in materiaNames)
                         {
-                            allZoneItems.Add(new WikiFateItem(materiaName, cost, rankRequired, zoneName, quest));
+                            var materia = itemSheet.FirstOrDefault(i => i.Name == materiaName);
+                            if (materia.RowId == 0)
+                            {
+                                Console.WriteLine($"Could not find {materiaName} in the item sheet");
+                                continue;
+                            }
+                            allZoneItems.Add(new WikiFateItem(materiaName, cost, rankRequired, zoneName, quest, expansionName, true));
                             Console.WriteLine($"Added {materiaName} from {zoneName} in {expansionName} which needs quest {quest}");
                         }
                         index++;
                         continue;
                     }
-                    else if (zoneName == "All Zones")
+                    if (zoneName == "All Zones" && name != "materia")
                     {
-                        allZoneItems.Add(new WikiFateItem(name, cost, rankRequired, zoneName, quest));
+                        allZoneItems.Add(new WikiFateItem(name, cost, rankRequired, zoneName, quest, expansionName, true));
                         continue;
                     }
-                    Items.Add(new WikiFateItem(name, cost, rankRequired, zoneName, quest));
+                    Items.Add(new WikiFateItem(name, cost, rankRequired, zoneName, quest, expansionName));
                     Console.WriteLine($"Added {name} from {zoneName} in {expansionName} which needs quest {quest}");
                 }
             }
